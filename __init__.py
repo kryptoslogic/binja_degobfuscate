@@ -18,33 +18,6 @@ def handle_deref(bv, deref_size, deref_addr):
     return data
 
 class EmuMagic(object):
-    # "instruction pointer"
-    ip = 0
-    instructions = None
-    output=""
-    
-    # What endianness does our arch use
-    endianness = None
-
-    #TODO: Remove arch specific code
-    registers = {
-        "fsbase": 100,
-        "rcx": 0,
-        "rsp": 0,
-        "rax": 0,
-        "rbp": 0,
-        "cl": 0,
-    }
-    memory = bytearray('\x00', encoding='ascii')*10000000
-    stack = []
-
-    # https://www.reddit.com/r/golang/comments/gq4pfh/what_is_the_purpose_of_fs_and_gs_registers_in/
-    # rcx = [fsbase - 8].q
-    # if (rsp u<= [rcx + 0x10].q) then 2 @ 0x6aec49 else 4 @ 0x6aebb3
-    memory[92] = 0
-    registers["rsp"] = 500
-    
-    structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q'}
     def _get_struct_fmt(self, size, signed):
         fmt = self.structfmt[size]
         if signed:
@@ -153,6 +126,28 @@ class EmuMagic(object):
     def __init__(self, candidate):
         self.endianness = candidate.arch.endianness
         self.instructions = candidate.llil
+        self.ip = 0
+        self.output=""
+
+        #TODO: Remove arch specific code
+        self.registers = {
+            "fsbase": 100,
+            "rcx": 0,
+            "rsp": 0,
+            "rax": 0,
+            "rbp": 0,
+            "cl": 0,
+        }
+        self.memory = bytearray('\x00', encoding='ascii')*10000000
+        self.stack = []
+
+        # https://www.reddit.com/r/golang/comments/gq4pfh/what_is_the_purpose_of_fs_and_gs_registers_in/
+        # rcx = [fsbase - 8].q
+        # if (rsp u<= [rcx + 0x10].q) then 2 @ 0x6aec49 else 4 @ 0x6aebb3
+        self.memory[92] = 0
+        self.registers["rsp"] = 500
+        
+        self.structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q'}
 
 def findslice(bv):
     global morestack_noctxt_sym
@@ -165,6 +160,11 @@ def findslice(bv):
     slicebytetostring = bv.get_function_at(slicebytetostring_sym[0].address)
 
 def validfunc(func):
+    #Disabling this until it's integrated into the deobfuscation plugin since the symbols will not be auto
+    #if func.symbol.auto == False:
+        #return False
+    if {morestack_noctxt, slicebytetostring} != set(func.callees):
+        return False
     def findxor(expr):
         if expr.operation == LowLevelILOperation.LLIL_XOR:
             return True
@@ -180,6 +180,13 @@ def validfunc(func):
             foundxor = True
     return foundxor
 
+def nextname(bv, newname):
+    for x in range(1,10000):
+        candidate = f"{newname}_{x}"
+        if candidate in bv.symbols.keys():
+            continue
+        return candidate
+
 def deobfunc(bv, func):
     if not slicebytetostring:
         findslice(bv)
@@ -189,25 +196,36 @@ def deobfunc(bv, func):
     if emu.output != "":
         pattern = re.compile(r'[\W_]+')
         shortname = pattern.sub("", emu.output)[0:32]
-        if len(emu.output) > 32:
+        if len(emu.output) > 32 or shortname != emu.output[0:32]:
             shortname += "..."
             for xref in bv.get_code_refs(func.start):
                 xref.function.set_comment_at(xref.address, emu.output)
-        func.name = "str_" + shortname
+        newname = "str_" + shortname #TODO: create setting
+        if newname in bv.symbols.keys() and func.start != bv.symbols[newname].address:
+            newname = nextname(bv, newname)
+        func.name = newname
 
 def deob(bv):
     if not slicebytetostring:
         findslice(bv)
 
-    log_info(f"Degobfuscate {len(bv.functions)} total functions")
+    log_info(f"Degobfuscate checking {len(bv.functions)} total functions")
+    counter = 0
 
     for func in bv.functions:
-        #Don't analyze functions that are already renamed
-        if (not func.symbol.auto and \
-           set([morestack_noctxt, slicebytetostring]) == set(func.callees) and \
-           validfunc(func)):
-            log_warn(repr(func))
+        if validfunc(func):
+            counter += 1
             deobfunc(bv, func)
 
-PluginCommand.register_for_function("Degobfuscate this function", "Tries to just deobfuscate this function as a gobfuscated string", deobfunc)
+    log_info(f"Degobfuscate successfully analyzed {count} functions")
+
+def deobsingle(bv, func):
+    if not slicebytetostring:
+        findslice(bv)
+    if validfunc(func):
+        deobfunc(bv, func)
+    else:
+        log_warn(f"Degobfuscate: {func.name} is not a valid candidate function")
+
+PluginCommand.register_for_function("Degobfuscate this function", "Tries to just deobfuscate this function as a gobfuscated string", deobsingle)
 PluginCommand.register("Degobfuscate all strings", "Searches all functions for obfuscated xor strings and attempts light IL emulation to recover them.", deob)
