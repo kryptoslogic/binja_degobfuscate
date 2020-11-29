@@ -127,7 +127,6 @@ class EmuMagic(object):
         mask = (1 << register_info.size * 8) - 1
 
         if inst.src == register_info.full_width_reg:
-            print(f"{inst.src} {register_info.full_width_reg} {register_name} = {full_reg_value}")
             return full_reg_value & mask
 
         mask = (1 << register_info.size * 8) - 1
@@ -175,22 +174,21 @@ class EmuMagic(object):
         self.ip = 0
         self.output=""
 
-        #TODO: Remove arch specific code
-        self.registers = {
-            "fsbase": 100,
-            "rcx": 0,
-            "rsp": 0,
-            "rax": 0,
-            "rbp": 0,
-            "cl": 0,
-        }
+        self.registers = {}
+        for r in self.arch.regs:
+            reg = self.arch.regs[r]
+            if reg.full_width_reg == r:
+                self.registers[r] = 0
+
         self.memory = bytearray('\x00', encoding='ascii')*10000000
         self.stack = []
 
+        #TODO: Remove arch specific code
         # https://www.reddit.com/r/golang/comments/gq4pfh/what_is_the_purpose_of_fs_and_gs_registers_in/
         # rcx = [fsbase - 8].q
         # if (rsp u<= [rcx + 0x10].q) then 2 @ 0x6aec49 else 4 @ 0x6aebb3
         self.memory[92] = 0
+        self.registers["fsbase"] = 100
         self.registers["rsp"] = 500
         
         self.structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q'}
