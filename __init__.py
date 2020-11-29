@@ -18,12 +18,13 @@ def handle_deref(bv, deref_size, deref_addr):
     return data
 
 class EmuMagic(object):
+
     def _get_struct_fmt(self, size, signed):
         fmt = self.structfmt[size]
         if signed:
             fmt = fmt.lower()
         return (
-            '<' if self.endianness == binaryninja.Endianness.LittleEndian
+            '<' if self.arch.endianness == binaryninja.Endianness.LittleEndian
             else ''
         ) + fmt
     
@@ -35,6 +36,38 @@ class EmuMagic(object):
         signed = value < 0
         d = struct.pack(self._get_struct_fmt(size, signed), value)
         self.memory[addr:addr+size] = d
+
+    def set_register(self, inst, value):
+        register_name = inst.dest.name
+        register_info = self.arch.regs[register_name]
+        # Are we setting a partial register or the full width one?
+        if register_name == register_info.full_width_reg:
+            self.registers[register_name] = value
+            return value
+
+        # from https://github.com/joshwatshttps://github.com/joshwatson/emilator/blob/master/emilator.py#L139-L148on/emilator/blob/master/emilator.py#L139-L148
+        # mask off the value that will be replaced
+        full_width_reg_info = self.arch.regs[register_info.full_width_reg]
+        full_width_reg_value = self.registers[full_width_reg_info.full_width_reg]
+
+        # https://reverseengineering.stackexchange.com/a/14610
+        # 32 bit ops will clear the top 32 bits
+        if register_info.extend == binaryninja.ImplicitRegisterExtend.ZeroExtendToFullWidth:
+            full_width_reg_value = value
+        elif register_info.extend == binaryninja.ImplicitRegisterExtend.NoExtend:
+            # mask off the value that will be replaced
+            mask = (1 << register_info.size * 8) - 1
+            full_mask = (1 << full_width_reg_info.size * 8) - 1
+            reg_bits = mask << (register_info.offset * 8)
+
+            full_width_reg_value &= full_mask ^ reg_bits
+            full_width_reg_value |= value << register_info.offset * 8
+
+        self.registers[register_info.full_width_reg] = full_width_reg_value
+        return value
+
+    def print_registers(self, prefix):
+        log_debug(f"{prefix} | {self.registers}")
 
     def handle_LLIL_XOR(self, inst):
         left = self.handle(inst.left)
@@ -79,17 +112,28 @@ class EmuMagic(object):
 
     def handle_LLIL_SET_REG(self, inst):
         src = self.handle(inst.src)
-        reg_name = str(inst.dest)
-        self.registers[reg_name] = src
-        log_debug(f"Degobfuscate: {reg_name}={hex(src)}")
+        self.set_register(inst, src)
         return True
     
     def handle_LLIL_CONST(self, inst):
         return(inst.value.value)
             
     def handle_LLIL_REG(self, inst):
-        reg_name = str(inst)
-        return self.registers[reg_name]
+        register_name = inst.src.name
+        register_info = self.arch.regs[register_name]
+        full_width_reg_info = self.arch.regs[register_info.full_width_reg]
+        full_reg_value = self.registers[register_info.full_width_reg]
+
+        mask = (1 << register_info.size * 8) - 1
+
+        if inst.src == register_info.full_width_reg:
+            print(f"{inst.src} {register_info.full_width_reg} {register_name} = {full_reg_value}")
+            return full_reg_value & mask
+
+        mask = (1 << register_info.size * 8) - 1
+        reg_bits = mask << (register_info.offset * 8)
+        reg_value = (full_reg_value & reg_bits) >> (register_info.offset * 8)
+        return reg_value
     
     def handle_LLIL_SUB(self, inst):
         return self.handle(inst.left) - self.handle(inst.right)
@@ -112,8 +156,9 @@ class EmuMagic(object):
     def execute(self):
         if self.ip >= len(self.instructions):
             return False
-        log_debug(f"Degobfuscate IP: {hex(self.ip)}")
+        log_debug(f"Degobfuscate IP: {self.ip}")
         instr = self.instructions[self.ip]
+        #self.candidate.set_auto_instr_highlight(instr.address, binaryninja.enums.HighlightStandardColor.GreenHighlightColor)
         self.ip += 1
         self.handle(instr)
         return True
@@ -124,7 +169,8 @@ class EmuMagic(object):
                 break
     
     def __init__(self, candidate):
-        self.endianness = candidate.arch.endianness
+        self.candidate = candidate
+        self.arch = candidate.arch
         self.instructions = candidate.llil
         self.ip = 0
         self.output=""
@@ -194,6 +240,7 @@ def deobfunc(bv, func):
     emu = EmuMagic(func)
     emu.run()
     if emu.output != "":
+        log_info(f"Result: {emu.output}")
         pattern = re.compile(r'[\W_]+')
         shortname = pattern.sub("", emu.output)[0:32]
         if len(emu.output) > 32 or shortname != emu.output[0:32]:
