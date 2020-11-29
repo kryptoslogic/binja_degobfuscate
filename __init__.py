@@ -3,6 +3,7 @@
 
 import os.path
 import struct
+import re
 from binaryninja import * 
 
 morestack_noctxt_sym = None
@@ -20,6 +21,7 @@ class EmuMagic(object):
     # "instruction pointer"
     ip = 0
     instructions = None
+    output=""
     
     # What endianness does our arch use
     endianness = None
@@ -60,7 +62,8 @@ class EmuMagic(object):
     def handle_LLIL_XOR(self, inst):
         left = self.handle(inst.left)
         right = self.handle(inst.right)
-        log_info("Degobfuscate: XOR " + chr(left ^ right))
+        log_debug("Degobfuscate: XOR " + chr(left ^ right))
+        self.output += chr(left ^ right)
         return left ^ right
     
     def handle_LLIL_ZX(self, expr):
@@ -123,7 +126,7 @@ class EmuMagic(object):
             handler = f"handle_{inst.operation.name}"
             has_handler = hasattr(self, handler)
             if has_handler is False:
-                log_info(f"Degobfuscate implement: {inst.operation.name}")
+                log_debug(f"Degobfuscate implement: {inst.operation.name}")
                 return None
             else:
                 res = getattr(self, handler)(inst)
@@ -164,7 +167,14 @@ def deobfunc(bv, func):
     emu = EmuMagic(func)
     log_info(f"Degobfuscate analyzing {func.name}")
     emu.run()
-
+    if emu.output != "":
+        pattern = re.compile('[\W_]+')
+        shortname = pattern.sub("", emu.output)[0:32]
+        if len(emu.output) > 32:
+            shortname += "..."
+            for xref in bv.get_code_refs(func.start):
+                xref.function.set_comment_at(xref.address, emu.output)
+        func.name = "str_" + shortname
 
 def deob(bv):
     findslice(bv)
@@ -176,7 +186,6 @@ def deob(bv):
         func_callees = func.callees
         if (len(func_callees)) == 2:
             if morestack_noctxt in func_callees and slicebytetostring in func_callees:
-                log_info(func.name)
                 for ins in func.instructions:
                     ins_type = ins[0][0]
                     if ins_type.text != "xor": #TODO: Remove arch specific code
@@ -190,7 +199,7 @@ def deob(bv):
                     break
 
     for candidate in deobfuscate_candidates:
-        deobfunc(bv, f)
+        deobfunc(bv, candidate)
 
 PluginCommand.register_for_function("Degobfuscate function strings", "Searches Symgrate2 db for the current function.", deobfunc)
 PluginCommand.register("Degobfuscate all strings", "Searches all functions for obfuscated xor strings and attempts light IL emulation to recover them.", deob)
