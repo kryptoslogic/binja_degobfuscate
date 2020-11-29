@@ -45,18 +45,22 @@ class EmuMagic(object):
     registers["rsp"] = 500
     
     structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q'}
-    def _get_struct_fmt(self, size):
+    def _get_struct_fmt(self, size, signed):
+        fmt = self.structfmt[size]
+        if signed:
+            fmt = fmt.lower()
         return (
             '<' if self.endianness == binaryninja.Endianness.LittleEndian
             else ''
-        ) + self.structfmt[size]
+        ) + fmt
     
     def read_memory(self, location, size):
-        result = struct.unpack(self._get_struct_fmt(size), self.memory[location:location+size])[0]
+        result = struct.unpack(self._get_struct_fmt(size, False), self.memory[location:location+size])[0]
         return result
     
     def write_memory(self, addr, size, value):
-        d = struct.pack(self._get_struct_fmt(size), value)
+        signed = value < 0
+        d = struct.pack(self._get_struct_fmt(size, signed), value)
         self.memory[addr:addr+size] = d
 
     def handle_LLIL_XOR(self, inst):
