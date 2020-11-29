@@ -164,15 +164,30 @@ def findslice(bv):
     morestack_noctxt = bv.get_function_at(morestack_noctxt_sym[0].address)
     slicebytetostring = bv.get_function_at(slicebytetostring_sym[0].address)
 
+def validfunc(func):
+    def findxor(expr):
+        if expr.operation == LowLevelILOperation.LLIL_XOR:
+            return True
+        for field in LowLevelILInstruction.ILOperations[expr.operation]:
+            if field[1] == "expr":
+                if findxor(getattr(expr, field[0])):
+                    return True
+        return False
+
+    foundxor = False
+    for il in func.llil.instructions:
+        if findxor(il):
+            foundxor = True
+    return foundxor
 
 def deobfunc(bv, func):
     if not slicebytetostring:
         findslice(bv)
-    emu = EmuMagic(func)
     log_info(f"Degobfuscate analyzing {func.name}")
+    emu = EmuMagic(func)
     emu.run()
     if emu.output != "":
-        pattern = re.compile('[\W_]+')
+        pattern = re.compile(r'[\W_]+')
         shortname = pattern.sub("", emu.output)[0:32]
         if len(emu.output) > 32:
             shortname += "..."
@@ -181,29 +196,18 @@ def deobfunc(bv, func):
         func.name = "str_" + shortname
 
 def deob(bv):
-    findslice(bv)
-    deobfuscate_candidates = set()
+    if not slicebytetostring:
+        findslice(bv)
 
     log_info(f"Degobfuscate {len(bv.functions)} total functions")
 
     for func in bv.functions:
-        func_callees = func.callees
-        if (len(func_callees)) == 2:
-            if morestack_noctxt in func_callees and slicebytetostring in func_callees:
-                for ins in func.instructions:
-                    ins_type = ins[0][0]
-                    if ins_type.text != "xor": #TODO: Remove arch specific code
-                        continue
-                    src = ins[0][2]
-                    dst  = ins[0][4]
-                    if src == "eax" and dst == "eax": #TODO: Remove arch specific code
-                        continue
-                    
-                    deobfuscate_candidates.add(func)
-                    break
+        #Don't analyze functions that are already renamed
+        if (not func.symbol.auto and \
+           set([morestack_noctxt, slicebytetostring]) == set(func.callees) and \
+           validfunc(func)):
+            log_warn(repr(func))
+            deobfunc(bv, func)
 
-    for candidate in deobfuscate_candidates:
-        deobfunc(bv, candidate)
-
-PluginCommand.register_for_function("Degobfuscate function strings", "Searches Symgrate2 db for the current function.", deobfunc)
+PluginCommand.register_for_function("Degobfuscate this function", "Tries to just deobfuscate this function as a gobfuscated string", deobfunc)
 PluginCommand.register("Degobfuscate all strings", "Searches all functions for obfuscated xor strings and attempts light IL emulation to recover them.", deob)
