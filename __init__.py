@@ -53,9 +53,10 @@ class EmuMagic(object):
     def read_memory(self, location, size):
         def get_data(addr, size):
             for segment in self.bv.segments:
-                if location >= segment.start and location <= segment.end:
-                    return self.bv.read(location, size)
-            return self.memory[location:location+size]
+                if addr >= segment.start and addr <= segment.end:
+                    log_debug(f"READING {size} BYTES FROM SEGMENT @ {addr}")
+                    return self.bv.read(addr, size)
+            return self.memory[addr:addr+size]
 
         if size <= 8:
             return struct.unpack(self._get_struct_fmt(size, False), get_data(location, size))[0]
