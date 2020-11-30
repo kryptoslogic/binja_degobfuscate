@@ -34,8 +34,12 @@ class EmuMagic(object):
     
     def write_memory(self, addr, size, value):
         signed = value < 0
-        d = struct.pack(self._get_struct_fmt(size, signed), value)
-        self.memory[addr:addr+size] = d
+        if size <= 8:
+            d = struct.pack(self._get_struct_fmt(size, signed), value)
+            self.memory[addr:addr+size] = d
+        else:
+            self.write_memory(addr, 8, (value >> 0) % 2**64)
+            self.write_memory(addr + 8, 8, (value >> 64) % 2**64)
 
     def set_register(self, inst, value):
         register_name = inst.dest.name
@@ -157,7 +161,7 @@ class EmuMagic(object):
             return False
         log_debug(f"Degobfuscate IP: {self.ip}")
         instr = self.instructions[self.ip]
-        #self.candidate.set_auto_instr_highlight(instr.address, binaryninja.enums.HighlightStandardColor.GreenHighlightColor)
+        self.candidate.set_auto_instr_highlight(instr.address, binaryninja.enums.HighlightStandardColor.GreenHighlightColor)
         self.ip += 1
         self.handle(instr)
         return True
@@ -191,7 +195,7 @@ class EmuMagic(object):
         self.registers["fsbase"] = 100
         self.registers["rsp"] = 500
         
-        self.structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q'}
+        self.structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q', 16: 'QQ'}
 
 def findslice(bv):
     global morestack_noctxt_sym
