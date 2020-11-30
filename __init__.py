@@ -279,27 +279,16 @@ def deobfunc(bv, func):
     emu = EmuMagic(bv, func)
     result = emu.run()
     if result != "":
-        comment = False
-        log_debug(f"DeGObfuscate result: {result}")
-        if result.strip() == "": #Cleans up some extraneous strings with spaces or newlines
-            shortname = "<whitespace>"
-            comment = True
-            result = repr(result)
-        else:
-            maxlength = Settings().get_integer("degobfuscate.maxlength")
-            shortname = function_name_regex.sub("", result)[0:maxlength]
-            if len(result) > maxlength:
-                comment = True
-                shortname += "…"
-            if shortname != result[0:maxlength]:
-                comment = True
-        if comment:
+        log_debug(f"DeGObfuscate result: {repr(result)}")
+        maxlength = Settings().get_integer("degobfuscate.maxlength")
+        shortname = function_name_regex.sub("", result)[0:maxlength]
+        if shortname != result[0:maxlength]:
             for xref in bv.get_code_refs(func.start):
-                xref.function.set_comment_at(xref.address, result)
-        newname = Settings().get_string("degobfuscate.prefix") + shortname
-        if newname in bv.symbols.keys() and func.start != bv.symbols[newname].address:
-            newname = nextname(bv, newname)
-        func.name = newname
+                xref.function.set_comment_at(xref.address, repr(result)[1:-1])
+        shortname = Settings().get_string("degobfuscate.prefix") + shortname
+        if shortname in bv.symbols.keys() and func.start != bv.symbols[shortname].address:
+            shortname = nextname(bv, shortname)
+        func.name = shortname
 
 class Deob(BackgroundTaskThread):
     def __init__(self, bv):
