@@ -28,6 +28,14 @@ Settings().register_setting("degobfuscate.maxlength", """
         "description" : "The maimum string length before the de-obfuscated string will be truncated when used in renaming the function. String comments will be added if the string is truncated."
     }
     """)
+Settings().register_setting("degobfuscate.highlight", """
+    {
+        "title" : "Debug Highlights",
+        "type" : "boolean",
+        "default" : false,
+        "description" : "Whether or not to add highlights to emulated code, useful for debugging the emulation."
+    }
+    """)
 
 def handle_deref(bv, deref_size, deref_addr):
     br = BinaryReader(bv)
@@ -188,7 +196,8 @@ class EmuMagic(object):
             return False
         log_debug(f"DeGObfuscate IP: {self.ip}")
         instr = self.instructions[self.ip]
-        self.candidate.set_auto_instr_highlight(instr.address, enums.HighlightStandardColor.GreenHighlightColor)
+        if self.highlight:
+            self.candidate.set_auto_instr_highlight(instr.address, enums.HighlightStandardColor.GreenHighlightColor)
         self.ip += 1
         self.handle(instr)
         return True
