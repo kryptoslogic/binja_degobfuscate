@@ -11,6 +11,24 @@ slicebytetostring_sym = None
 morestack_noctxt = None
 slicebytetostring = None
 
+Settings().register_group("degobfuscate", "DeGObfuscate")
+Settings().register_setting("degobfuscate.prefix", """
+    {
+        "title" : "Default function prefix",
+        "type" : "string",
+        "default" : "str_",
+        "description" : "The string prefix that will be put in front of a shortened string name for deobfuscated functions."
+    }
+    """)
+Settings().register_setting("degobfuscate.maxlength", """
+    {
+        "title" : "Maximum Length",
+        "type" : "number",
+        "default" : 32,
+        "description" : "The maimum string length before the de-obfuscated string will be truncated when used in renaming the function. String comments will be added if the string is truncated."
+    }
+    """)
+
 def handle_deref(bv, deref_size, deref_addr):
     br = binaryninja.BinaryReader(bv)
     br.seek(deref_addr)
@@ -248,35 +266,61 @@ def nextname(bv, newname):
 def deobfunc(bv, func):
     if not slicebytetostring:
         findslice(bv)
-    log_info(f"Degobfuscate analyzing {func.name}")
     emu = EmuMagic(bv, func)
     emu.run()
     if emu.output != "":
-        log_info(f"Result: {emu.output}")
-        pattern = re.compile(r'[\W_]+')
-        shortname = pattern.sub("", emu.output)[0:32]
-        if len(emu.output) > 32 or shortname != emu.output[0:32]:
-            shortname += "..."
+        output = emu.output
+        comment = False
+        log_debug(f"Degobfuscate result: {emu.output}")
+        if output.strip() == "": #Cleans up some extraneous strings with spaces or newlines
+            shortname = "<whitespace>"
+            comment = True
+            output = repr(output)
+        else:
+            pattern = re.compile(r'[\W_]+')
+            maxlength = Settings().get_integer("degobfuscate.maxlength")
+            shortname = pattern.sub("", output)[0:maxlength]
+            if len(emu.output) > maxlength:
+                comment = True
+                shortname += "…"
+            if shortname != emu.output[0:maxlength]:
+                comment = True
+        if comment:
             for xref in bv.get_code_refs(func.start):
-                xref.function.set_comment_at(xref.address, emu.output)
-        newname = "str_" + shortname #TODO: create setting
+                xref.function.set_comment_at(xref.address, output)
+        newname = Settings().get_string("degobfuscate.prefix") + shortname
         if newname in bv.symbols.keys() and func.start != bv.symbols[newname].address:
             newname = nextname(bv, newname)
         func.name = newname
 
+class Deob(BackgroundTaskThread):
+    def __init__(self, bv):
+        self.total = len(bv.functions)
+        BackgroundTaskThread.__init__(self, f"Degobfuscate: scanning {self.total} total functions...", True)
+        self.bv = bv
+        self.match = 0
+        self.index = 0
+
+    def run(self):
+        if not slicebytetostring:
+            findslice(self.bv)
+
+        for func in self.bv.functions:
+            if self.cancelled:
+                self.progress = f"Degobfuscate cancelled, aborting"
+                return
+
+            self.index += 1
+            if validfunc(func):
+                self.match += 1
+                self.progress = f"Degobfuscate analyzing ({self.index}/{self.total}) : {func.name}"
+                deobfunc(self.bv, func)
+
+        self.progress = f"Degobfuscate emulated {self.match} functions"
+
 def deob(bv):
-    if not slicebytetostring:
-        findslice(bv)
-
-    log_info(f"Degobfuscate checking {len(bv.functions)} total functions")
-    counter = 0
-
-    for func in bv.functions:
-        if validfunc(func):
-            counter += 1
-            deobfunc(bv, func)
-
-    log_info(f"Degobfuscate successfully analyzed {counter} functions")
+    d = Deob(bv)
+    d.start()
 
 def deobsingle(bv, func):
     if not slicebytetostring:
