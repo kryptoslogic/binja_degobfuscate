@@ -254,11 +254,11 @@ def validfunc(bv, func):
     slicebytetostring_sym = bv.get_symbols_by_name("runtime.slicebytetostring") or bv.get_symbols_by_name("_runtime.slicebytetostring") or bv.get_symbols_by_name("runtime_slicebytetostring") or bv.get_symbols_by_name("_runtime_slicebytetostring")
     morestack_noctxt = bv.get_function_at(morestack_noctxt_sym[0].address)
     slicebytetostring = bv.get_function_at(slicebytetostring_sym[0].address)
-    if {morestack_noctxt, slicebytetostring} != set(func.callees):
+    if 2 <= len(func.callees) <= 4 and len(func.callees) and func.callees[0] == morestack_noctxt and func.callees[-1] == slicebytetostring:
         log_debug(f"{func.name} is not valid due to callees not matching")
         return False
 
-    # Find functions which make use of an XOR primative
+    # Find functions which make use of an XOR primitive
     # Because we're using IL here we don't need to worry about xor eax, eax because that gets optimized into:
     # LLIL_SET_REG eax/LLIL_CONST 0
     def findxor(expr):
@@ -319,7 +319,10 @@ class Deob(BackgroundTaskThread):
             if validfunc(self.bv, func):
                 self.match += 1
                 self.progress = f"DeGObfuscate analyzing ({self.index}/{self.total}) : {func.name}"
-                deobfunc(self.bv, func)
+                try:
+                    deobfunc(self.bv, func)
+                except:
+                    log_warn(f"DeGObfuscate: failed to emulate {func.name}")
 
         self.progress = f"DeGObfuscate emulated {self.match} functions"
 
