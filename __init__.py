@@ -6,11 +6,6 @@ import struct
 import re
 from binaryninja import * 
 
-morestack_noctxt_sym = None
-slicebytetostring_sym = None
-morestack_noctxt = None
-slicebytetostring = None
-
 Settings().register_group("degobfuscate", "DeGObfuscate")
 Settings().register_setting("degobfuscate.prefix", """
     {
@@ -55,7 +50,6 @@ class EmuMagic(object):
         ) + fmt
     
     def read_memory(self, location, size):
-        # TODO: Implement virtual memory? - this works for now :shrug:
         for segment in self.bv.segments:
             if location >= segment.start and location <= segment.end:
                 #print(hex(struct.unpack(self._get_struct_fmt(size, False), self.bv.read(location, size))[0]))
@@ -224,30 +218,29 @@ class EmuMagic(object):
         self.memory = bytearray('\x00', encoding='ascii')*10000000
         self.stack = []
 
-        #TODO: Remove arch specific code
         # https://www.reddit.com/r/golang/comments/gq4pfh/what_is_the_purpose_of_fs_and_gs_registers_in/
         # rcx = [fsbase - 8].q
         # if (rsp u<= [rcx + 0x10].q) then 2 @ 0x6aec49 else 4 @ 0x6aebb3
         self.memory[92] = 0
-        self.registers["fsbase"] = 100
+        if bv.arch in [Architecture['x86'], Architecture['x86_64']]:
+            self.registers["fsbase"] = 100
+        #TODO: Replace with generic stack register identification
         self.registers["rsp"] = 500
         
         self.structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q', 16: 'QQ'}
 
-def findslice(bv):
-    global morestack_noctxt_sym
-    global slicebytetostring_sym
-    global morestack_noctxt
-    global slicebytetostring
+        #Initialize at creation as opposed to each emulation step for performance
+        self.highlight = Settings().get_bool("degobfuscate.highlight")
+
+
+def validfunc(bv, func):
+    #Disabling this until it's integrated into the deobfuscation plugin since the symbols will not be auto
+    #if func.symbol.auto == False:
+        #return False
     morestack_noctxt_sym = bv.get_symbols_by_name("runtime.morestack_noctxt") or bv.get_symbols_by_name("_runtime.morestack_noctxt") or bv.get_symbols_by_name("runtime_morestack_noctxt") or bv.get_symbols_by_name("_runtime_morestack_noctxt")
     slicebytetostring_sym = bv.get_symbols_by_name("runtime.slicebytetostring") or bv.get_symbols_by_name("_runtime.slicebytetostring") or bv.get_symbols_by_name("runtime_slicebytetostring") or bv.get_symbols_by_name("_runtime_slicebytetostring")
     morestack_noctxt = bv.get_function_at(morestack_noctxt_sym[0].address)
     slicebytetostring = bv.get_function_at(slicebytetostring_sym[0].address)
-
-def validfunc(func):
-    #Disabling this until it's integrated into the deobfuscation plugin since the symbols will not be auto
-    #if func.symbol.auto == False:
-        #return False
     if {morestack_noctxt, slicebytetostring} != set(func.callees):
         log_debug(f"{func.name} is not valid due to callees not matching")
         return False
@@ -281,8 +274,6 @@ def nextname(bv, newname):
         return candidate
 
 def deobfunc(bv, func):
-    if not slicebytetostring:
-        findslice(bv)
     emu = EmuMagic(bv, func)
     emu.run()
     if emu.output != "":
@@ -319,16 +310,13 @@ class Deob(BackgroundTaskThread):
         self.index = 0
 
     def run(self):
-        if not slicebytetostring:
-            findslice(self.bv)
-
         for func in self.bv.functions:
             if self.cancelled:
                 self.progress = f"DeGObfuscate cancelled, aborting"
                 return
 
             self.index += 1
-            if validfunc(func):
+            if validfunc(self.bv, func):
                 self.match += 1
                 self.progress = f"DeGObfuscate analyzing ({self.index}/{self.total}) : {func.name}"
                 deobfunc(self.bv, func)
@@ -340,9 +328,7 @@ def deob(bv):
     d.start()
 
 def deobsingle(bv, func):
-    if not slicebytetostring:
-        findslice(bv)
-    if validfunc(func):
+    if validfunc(bv, func):
         deobfunc(bv, func)
     else:
         log_warn(f"DeGObfuscate: {func.name} is not a valid candidate function")
