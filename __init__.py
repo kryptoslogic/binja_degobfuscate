@@ -51,13 +51,21 @@ class EmuMagic(object):
         ) + fmt
     
     def read_memory(self, location, size):
-        for segment in self.bv.segments:
-            if location >= segment.start and location <= segment.end:
-                #print(hex(struct.unpack(self._get_struct_fmt(size, False), self.bv.read(location, size))[0]))
-                return struct.unpack(self._get_struct_fmt(size, False), self.bv.read(location, size))[0]
+        def get_data(addr, size):
+            for segment in self.bv.segments:
+                if location >= segment.start and location <= segment.end:
+                    return self.bv.read(location, size)
+            return self.memory[location:location+size]
 
-        result = struct.unpack(self._get_struct_fmt(size, False), self.memory[location:location+size])[0]
-        return result
+        if size <= 8:
+            return struct.unpack(self._get_struct_fmt(size, False), get_data(location, size))[0]
+        else:
+            if size != 16:
+                raise Exception("TODO: Fix reads of size 16 bytes+")
+                
+            a = struct.unpack(self._get_struct_fmt(8, False), get_data(location, 8))[0]
+            b = struct.unpack(self._get_struct_fmt(8, False), get_data(location + 8, 8))[0]
+            return (b << 64) + a
     
     def write_memory(self, addr, size, value):
         signed = value < 0
@@ -65,6 +73,8 @@ class EmuMagic(object):
             d = struct.pack(self._get_struct_fmt(size, signed), value)
             self.memory[addr:addr+size] = d
         else:
+            if size != 16:
+                raise Exception("TODO: Fix reads of size 16 bytes+")
             self.write_memory(addr, 8, (value >> 0) % 2**64)
             self.write_memory(addr + 8, 8, (value >> 64) % 2**64)
 
