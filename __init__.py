@@ -240,7 +240,12 @@ def validfunc(func):
     #if func.symbol.auto == False:
         #return False
     if {morestack_noctxt, slicebytetostring} != set(func.callees):
+        log_debug(f"{func.name} is not valid due to callees not matching")
         return False
+
+    # Find functions which make use of an XOR primative
+    # Because we're using IL here we don't need to worry about xor eax, eax because that gets optimized into:
+    # LLIL_SET_REG eax/LLIL_CONST 0
     def findxor(expr):
         if expr.operation == LowLevelILOperation.LLIL_XOR:
             return True
@@ -254,6 +259,9 @@ def validfunc(func):
     for il in func.llil.instructions:
         if findxor(il):
             foundxor = True
+    
+    if not foundxor:
+        log_debug(f"{func.name} is not valid due to no usage of LLIL_XOR")
     return foundxor
 
 def nextname(bv, newname):
