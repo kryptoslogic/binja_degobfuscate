@@ -30,7 +30,7 @@ Settings().register_setting("degobfuscate.maxlength", """
     """)
 
 def handle_deref(bv, deref_size, deref_addr):
-    br = binaryninja.BinaryReader(bv)
+    br = BinaryReader(bv)
     br.seek(deref_addr)
     data = br.read(deref_size)
     return data
@@ -42,7 +42,7 @@ class EmuMagic(object):
         if signed:
             fmt = fmt.lower()
         return (
-            '<' if self.arch.endianness == binaryninja.Endianness.LittleEndian
+            '<' if self.arch.endianness == Endianness.LittleEndian
             else ''
         ) + fmt
     
@@ -80,9 +80,9 @@ class EmuMagic(object):
 
         # https://reverseengineering.stackexchange.com/a/14610
         # 32 bit ops will clear the top 32 bits
-        if register_info.extend == binaryninja.ImplicitRegisterExtend.ZeroExtendToFullWidth:
+        if register_info.extend == ImplicitRegisterExtend.ZeroExtendToFullWidth:
             full_width_reg_value = value
-        elif register_info.extend == binaryninja.ImplicitRegisterExtend.NoExtend:
+        elif register_info.extend == ImplicitRegisterExtend.NoExtend:
             # mask off the value that will be replaced
             mask = (1 << register_info.size * 8) - 1
             full_mask = (1 << full_width_reg_info.size * 8) - 1
@@ -100,7 +100,7 @@ class EmuMagic(object):
     def handle_LLIL_XOR(self, inst):
         left = self.handle(inst.left)
         right = self.handle(inst.right)
-        log_debug("Degobfuscate: XOR " + chr(left ^ right))
+        log_debug("DeGObfuscate: XOR " + chr(left ^ right))
         self.output += chr(left ^ right)
         return left ^ right
     
@@ -172,12 +172,12 @@ class EmuMagic(object):
         return self.handle(inst.left) + self.handle(inst.right)
 
     def handle(self, inst):
-        log_debug(f"Degobfuscate executing: {inst.operation.name}")
+        log_debug(f"DeGObfuscate executing: {inst.operation.name}")
         for field in LowLevelILInstruction.ILOperations[inst.operation]:
             handler = f"handle_{inst.operation.name}"
             has_handler = hasattr(self, handler)
             if has_handler is False:
-                log_debug(f"Degobfuscate implement: {inst.operation.name}")
+                log_debug(f"DeGObfuscate implement: {inst.operation.name}")
                 return None
             else:
                 res = getattr(self, handler)(inst)
@@ -186,9 +186,9 @@ class EmuMagic(object):
     def execute(self):
         if self.ip >= len(self.instructions):
             return False
-        log_debug(f"Degobfuscate IP: {self.ip}")
+        log_debug(f"DeGObfuscate IP: {self.ip}")
         instr = self.instructions[self.ip]
-        self.candidate.set_auto_instr_highlight(instr.address, binaryninja.enums.HighlightStandardColor.GreenHighlightColor)
+        self.candidate.set_auto_instr_highlight(instr.address, enums.HighlightStandardColor.GreenHighlightColor)
         self.ip += 1
         self.handle(instr)
         return True
@@ -271,7 +271,7 @@ def deobfunc(bv, func):
     if emu.output != "":
         output = emu.output
         comment = False
-        log_debug(f"Degobfuscate result: {emu.output}")
+        log_debug(f"DeGObfuscate result: {emu.output}")
         if output.strip() == "": #Cleans up some extraneous strings with spaces or newlines
             shortname = "<whitespace>"
             comment = True
@@ -296,7 +296,7 @@ def deobfunc(bv, func):
 class Deob(BackgroundTaskThread):
     def __init__(self, bv):
         self.total = len(bv.functions)
-        BackgroundTaskThread.__init__(self, f"Degobfuscate: scanning {self.total} total functions...", True)
+        BackgroundTaskThread.__init__(self, f"DeGObfuscate: scanning {self.total} total functions...", True)
         self.bv = bv
         self.match = 0
         self.index = 0
@@ -307,16 +307,16 @@ class Deob(BackgroundTaskThread):
 
         for func in self.bv.functions:
             if self.cancelled:
-                self.progress = f"Degobfuscate cancelled, aborting"
+                self.progress = f"DeGObfuscate cancelled, aborting"
                 return
 
             self.index += 1
             if validfunc(func):
                 self.match += 1
-                self.progress = f"Degobfuscate analyzing ({self.index}/{self.total}) : {func.name}"
+                self.progress = f"DeGObfuscate analyzing ({self.index}/{self.total}) : {func.name}"
                 deobfunc(self.bv, func)
 
-        self.progress = f"Degobfuscate emulated {self.match} functions"
+        self.progress = f"DeGObfuscate emulated {self.match} functions"
 
 def deob(bv):
     d = Deob(bv)
@@ -328,7 +328,7 @@ def deobsingle(bv, func):
     if validfunc(func):
         deobfunc(bv, func)
     else:
-        log_warn(f"Degobfuscate: {func.name} is not a valid candidate function")
+        log_warn(f"DeGObfuscate: {func.name} is not a valid candidate function")
 
-PluginCommand.register_for_function("Degobfuscate this function", "Tries to just deobfuscate this function as a gobfuscated string", deobsingle)
-PluginCommand.register("Degobfuscate all strings", "Searches all functions for obfuscated xor strings and attempts light IL emulation to recover them.", deob)
+PluginCommand.register_for_function("DeGObfuscate single function", "Tries to just deobfuscate this function as a gobfuscated string", deobsingle)
+PluginCommand.register("DeGObfuscate all functions", "Searches all functions for obfuscated xor strings and attempts light IL emulation to recover them.", deob)
