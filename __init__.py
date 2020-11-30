@@ -6,6 +6,7 @@ import struct
 import re
 from binaryninja import * 
 
+function_name_regex = re.compile(r'[\W_]+')
 Settings().register_group("degobfuscate", "DeGObfuscate")
 Settings().register_setting("degobfuscate.prefix", """
     {
@@ -285,9 +286,8 @@ def deobfunc(bv, func):
             comment = True
             output = repr(output)
         else:
-            pattern = re.compile(r'[\W_]+')
             maxlength = Settings().get_integer("degobfuscate.maxlength")
-            shortname = pattern.sub("", output)[0:maxlength]
+            shortname = function_name_regex.sub("", output)[0:maxlength]
             if len(emu.output) > maxlength:
                 comment = True
                 shortname += "…"
