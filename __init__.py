@@ -29,6 +29,12 @@ class EmuMagic(object):
         ) + fmt
     
     def read_memory(self, location, size):
+        # TODO: Implement virtual memory? - this works for now :shrug:
+        for segment in self.bv.segments:
+            if location >= segment.start and location <= segment.end:
+                #print(hex(struct.unpack(self._get_struct_fmt(size, False), self.bv.read(location, size))[0]))
+                return struct.unpack(self._get_struct_fmt(size, False), self.bv.read(location, size))[0]
+
         result = struct.unpack(self._get_struct_fmt(size, False), self.memory[location:location+size])[0]
         return result
     
@@ -120,8 +126,11 @@ class EmuMagic(object):
         return True
     
     def handle_LLIL_CONST(self, inst):
-        return(inst.value.value)
-            
+        return inst.constant
+
+    def handle_LLIL_CONST_PTR(self, inst):
+        return inst.constant
+
     def handle_LLIL_REG(self, inst):
         register_name = inst.src.name
         register_info = self.arch.regs[register_name]
@@ -171,7 +180,8 @@ class EmuMagic(object):
             if not self.execute():
                 break
     
-    def __init__(self, candidate):
+    def __init__(self, bv, candidate):
+        self.bv = bv
         self.candidate = candidate
         self.arch = candidate.arch
         self.instructions = candidate.llil
@@ -239,7 +249,7 @@ def deobfunc(bv, func):
     if not slicebytetostring:
         findslice(bv)
     log_info(f"Degobfuscate analyzing {func.name}")
-    emu = EmuMagic(func)
+    emu = EmuMagic(bv, func)
     emu.run()
     if emu.output != "":
         log_info(f"Result: {emu.output}")
@@ -266,7 +276,7 @@ def deob(bv):
             counter += 1
             deobfunc(bv, func)
 
-    log_info(f"Degobfuscate successfully analyzed {count} functions")
+    log_info(f"Degobfuscate successfully analyzed {counter} functions")
 
 def deobsingle(bv, func):
     if not slicebytetostring:
