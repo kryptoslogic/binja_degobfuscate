@@ -201,6 +201,7 @@ class EmuMagic(object):
         while True:
             if not self.execute():
                 break
+        return self.output
     
     def __init__(self, bv, candidate):
         self.bv = bv
@@ -208,7 +209,7 @@ class EmuMagic(object):
         self.arch = candidate.arch
         self.instructions = candidate.llil
         self.ip = 0
-        self.output=""
+        self.output = ""
 
         self.registers = {}
         for r in self.arch.regs:
@@ -276,26 +277,25 @@ def nextname(bv, newname):
 
 def deobfunc(bv, func):
     emu = EmuMagic(bv, func)
-    emu.run()
-    if emu.output != "":
-        output = emu.output
+    result = emu.run()
+    if result != "":
         comment = False
-        log_debug(f"DeGObfuscate result: {emu.output}")
-        if output.strip() == "": #Cleans up some extraneous strings with spaces or newlines
+        log_debug(f"DeGObfuscate result: {result}")
+        if result.strip() == "": #Cleans up some extraneous strings with spaces or newlines
             shortname = "<whitespace>"
             comment = True
-            output = repr(output)
+            result = repr(result)
         else:
             maxlength = Settings().get_integer("degobfuscate.maxlength")
-            shortname = function_name_regex.sub("", output)[0:maxlength]
-            if len(emu.output) > maxlength:
+            shortname = function_name_regex.sub("", result)[0:maxlength]
+            if len(result) > maxlength:
                 comment = True
                 shortname += "…"
-            if shortname != emu.output[0:maxlength]:
+            if shortname != result[0:maxlength]:
                 comment = True
         if comment:
             for xref in bv.get_code_refs(func.start):
-                xref.function.set_comment_at(xref.address, output)
+                xref.function.set_comment_at(xref.address, result)
         newname = Settings().get_string("degobfuscate.prefix") + shortname
         if newname in bv.symbols.keys() and func.start != bv.symbols[newname].address:
             newname = nextname(bv, newname)
