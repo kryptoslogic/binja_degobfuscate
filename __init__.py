@@ -254,8 +254,8 @@ def validfunc(bv, func):
     slicebytetostring_sym = bv.get_symbols_by_name("runtime.slicebytetostring") or bv.get_symbols_by_name("_runtime.slicebytetostring") or bv.get_symbols_by_name("runtime_slicebytetostring") or bv.get_symbols_by_name("_runtime_slicebytetostring")
     morestack_noctxt = bv.get_function_at(morestack_noctxt_sym[0].address)
     slicebytetostring = bv.get_function_at(slicebytetostring_sym[0].address)
-    if 2 <= len(func.callees) <= 4 and len(func.callees) and func.callees[0] == morestack_noctxt and func.callees[-1] == slicebytetostring:
-        log_debug(f"{func.name} is not valid due to callees not matching")
+    # TODO: Replace this with a much more robust heuristic for detecting obfuscated functions
+    if len(func.callees) < 2 or len(func.callees) > 5 or func.callees[-1] != morestack_noctxt or func.callees[0] != slicebytetostring:
         return False
 
     # Find functions which make use of an XOR primitive
