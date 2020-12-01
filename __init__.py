@@ -111,6 +111,57 @@ class EmuMagic(object):
     def print_registers(self, prefix):
         log_debug(f"{prefix} | {self.registers}")
 
+    # Pop a value from the stack
+    def stack_pop(self, size):
+        sp = self.arch.stack_pointer
+        self.registers[sp] += size
+        return self.read_memory(self.registers[sp], size)
+
+    # Push a value onto the stack
+    def stack_push(self, value, size):
+        sp = self.arch.stack_pointer
+        self.write_memory(self.registers[sp], size, value)
+        self.registers[sp] -= size
+        return self.registers[sp]
+
+    def handle_LLIL_TAILCALL(self, expr):
+        callee = self.handle(expr.dest)
+        callee_func = self.bv.get_function_at(callee)
+        log_debug(f"LLIL_TAILCALL: We're jumping to {callee_func.name}")
+        self.instructions = callee_func.llil
+        self.ip = 0
+
+    def handle_LLIL_CALL(self, expr):
+        callee = self.handle(expr.dest)
+        callee_func = self.bv.get_function_at(callee)
+
+        slicebytetostring_sym = self.bv.get_symbols_by_name("runtime.slicebytetostring") or self.bv.get_symbols_by_name("_runtime.slicebytetostring") or self.bv.get_symbols_by_name("runtime_slicebytetostring") or self.bv.get_symbols_by_name("_runtime_slicebytetostring")
+        slicebytetostring = self.bv.get_function_at(slicebytetostring_sym[0].address)
+        if callee_func == slicebytetostring:
+            log_debug("LLIL_CALL: Avoiding call to runtime function, we are out of here!")
+            self.ip = 50000000
+            return
+        # TODO: I guess there's an off by one here cause technically this should point to the current instruction, not the next one
+        ret_address = self.instructions[self.ip].address
+        log_debug(f"LLIL_CALL: We're jumping to {callee_func.name} and we'll come back to {hex(ret_address)}")
+        self.stack_push(ret_address, self.arch.address_size)
+        self.instructions = callee_func.llil
+        self.ip = 0
+
+    def handle_LLIL_RET(self, expr):
+        ret_addr = self.stack_pop(self.arch.address_size)
+        ret_func = self.bv.get_functions_containing(ret_addr)[0]
+        self.instructions = ret_func.llil
+        ret_il = ret_func.get_low_level_il_at(ret_addr)
+        self.ip = ret_il.instr_index
+        log_debug(f"LLIL_RET: Returning to {ret_func.name} @ {hex(ret_addr)} and IP is becoming: {self.ip}")
+
+    def handle_LLIL_PUSH(self, expr):
+        return self.stack_push(self.handle(expr.src), expr.size)
+
+    def handle_LLIL_POP(self, expr):
+        return self.stack_pop(expr.size)
+
     def handle_LLIL_XOR(self, inst):
         left = self.handle(inst.left)
         right = self.handle(inst.right)
@@ -240,6 +291,7 @@ class EmuMagic(object):
             self.registers["fsbase"] = 100
         self.registers[bv.arch.stack_pointer] = 500
         
+        self.registers[bv.arch.stack_pointer] = 5000
         self.structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q', 16: 'QQ'}
 
         #Initialize at creation as opposed to each emulation step for performance
