@@ -231,14 +231,14 @@ class EmuMagic(object):
         self.memory = bytearray('\x00', encoding='ascii')*10000000
         self.stack = []
 
+        # TODO: Not sure how this will be handled in other architectures?
         # https://www.reddit.com/r/golang/comments/gq4pfh/what_is_the_purpose_of_fs_and_gs_registers_in/
         # rcx = [fsbase - 8].q
         # if (rsp u<= [rcx + 0x10].q) then 2 @ 0x6aec49 else 4 @ 0x6aebb3
         self.memory[92] = 0
         if bv.arch in [Architecture['x86'], Architecture['x86_64']]:
             self.registers["fsbase"] = 100
-        #TODO: Replace with generic stack register identification
-        self.registers["rsp"] = 500
+        self.registers[bv.arch.stack_pointer] = 500
         
         self.structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q', 16: 'QQ'}
 
