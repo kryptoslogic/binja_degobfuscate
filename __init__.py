@@ -139,7 +139,6 @@ class EmuMagic(object):
         slicebytetostring = self.bv.get_function_at(slicebytetostring_sym[0].address)
         if callee_func == slicebytetostring:
             log_debug("LLIL_CALL: Avoiding call to runtime function, we are out of here!")
-            self.ip = 50000000
             return
         # TODO: I guess there's an off by one here cause technically this should point to the current instruction, not the next one
         ret_address = self.instructions[self.ip].address
@@ -305,7 +304,7 @@ def validfunc(bv, func):
     # TODO: Replace this with a much more robust heuristic for detecting obfuscated functions
     if not slicebytetostring in func.callees or not morestack_noctxt in func.callees:
         return False
-    if func.callees.index(morestack_noctxt) > func.callees.index(slicebytetostring):
+    if func.callees.index(morestack_noctxt) < func.callees.index(slicebytetostring):
         return False
     #if len(func.callees) < 2 or len(func.callees) > 5 or func.callees[-1] != morestack_noctxt or func.callees[0] != slicebytetostring:
         #return False
