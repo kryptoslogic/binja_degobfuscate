@@ -139,9 +139,10 @@ class EmuMagic(object):
         slicebytetostring = self.bv.get_function_at(slicebytetostring_sym[0].address)
         if callee_func == slicebytetostring:
             log_debug("LLIL_CALL: Avoiding call to runtime function, we are out of here!")
-            self.ip = 50000000
+            # Setting the IP to overflow the available instructions to halt execution
+            self.ip = len(self.instructions) + 1
             return
-        ret_address = self.ip + 1
+        ret_address = self.instructions[self.ip + 1].address
         log_debug(f"LLIL_CALL: We're jumping to {callee_func.name} and we'll come back to {hex(ret_address)}")
         self.stack_push(ret_address, self.arch.address_size)
         self.instructions = callee_func.llil
@@ -372,8 +373,8 @@ class Deob(BackgroundTaskThread):
                 self.progress = f"DeGObfuscate analyzing ({self.index}/{self.total}) : {func.name}"
                 try:
                     deobfunc(self.bv, func)
-                except:
-                    log_warn(f"DeGObfuscate: failed to emulate {func.name}")
+                except Exception as e:
+                    log_warn(f"DeGObfuscate: error while emulating {func.name}: {e}")
 
         self.progress = f"DeGObfuscate emulated {self.match} functions"
 
@@ -384,8 +385,8 @@ def deob(bv):
 def deobsingle(bv, func):
     try:
         deobfunc(bv, func)
-    except:
-        log_warn(f"DeGObfuscate: {func.name} is not a valid candidate function")
+    except Exception as e:
+        log_warn(f"DeGObfuscate: error while emulating {func.name}: {e}")
 
 PluginCommand.register_for_function("DeGObfuscate single function", "Tries to just deobfuscate this function as a gobfuscated string", deobsingle)
 PluginCommand.register("DeGObfuscate all functions", "Searches all functions for obfuscated xor strings and attempts light IL emulation to recover them.", deob)
