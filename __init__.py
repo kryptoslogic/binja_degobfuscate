@@ -303,8 +303,12 @@ def validfunc(bv, func):
     morestack_noctxt = bv.get_function_at(morestack_noctxt_sym[0].address)
     slicebytetostring = bv.get_function_at(slicebytetostring_sym[0].address)
     # TODO: Replace this with a much more robust heuristic for detecting obfuscated functions
-    if len(func.callees) < 2 or len(func.callees) > 5 or func.callees[-1] != morestack_noctxt or func.callees[0] != slicebytetostring:
+    if not slicebytetostring in func.callees or not morestack_noctxt in func.callees:
         return False
+    if func.callees.index(morestack_noctxt) > func.callees.index(slicebytetostring):
+        return False
+    #if len(func.callees) < 2 or len(func.callees) > 5 or func.callees[-1] != morestack_noctxt or func.callees[0] != slicebytetostring:
+        #return False
 
     # Find functions which make use of an XOR primitive
     # Because we're using IL here we don't need to worry about xor eax, eax because that gets optimized into:
