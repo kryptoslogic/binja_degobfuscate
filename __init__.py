@@ -139,9 +139,9 @@ class EmuMagic(object):
         slicebytetostring = self.bv.get_function_at(slicebytetostring_sym[0].address)
         if callee_func == slicebytetostring:
             log_debug("LLIL_CALL: Avoiding call to runtime function, we are out of here!")
+            self.ip = 50000000
             return
-        # TODO: I guess there's an off by one here cause technically this should point to the current instruction, not the next one
-        ret_address = self.instructions[self.ip].address
+        ret_address = self.ip + 1
         log_debug(f"LLIL_CALL: We're jumping to {callee_func.name} and we'll come back to {hex(ret_address)}")
         self.stack_push(ret_address, self.arch.address_size)
         self.instructions = callee_func.llil
