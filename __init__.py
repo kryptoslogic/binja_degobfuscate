@@ -289,9 +289,8 @@ class EmuMagic(object):
         self.memory[92] = 0
         if bv.arch in [Architecture['x86'], Architecture['x86_64']]:
             self.registers["fsbase"] = 100
-        self.registers[bv.arch.stack_pointer] = 500
-        
-        self.registers[bv.arch.stack_pointer] = 5000
+            self.registers["gsbase"] = 100
+        self.registers[bv.arch.stack_pointer] = 0x10000
         self.structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q', 16: 'QQ'}
 
         self.highlight = Settings().get_bool("degobfuscate.highlight")
@@ -305,10 +304,6 @@ def validfunc(bv, func):
     # TODO: Replace this with a much more robust heuristic for detecting obfuscated functions
     if not slicebytetostring in func.callees or not morestack_noctxt in func.callees:
         return False
-    if func.callees.index(morestack_noctxt) < func.callees.index(slicebytetostring):
-        return False
-    #if len(func.callees) < 2 or len(func.callees) > 5 or func.callees[-1] != morestack_noctxt or func.callees[0] != slicebytetostring:
-        #return False
 
     # Find functions which make use of an XOR primitive
     # Because we're using IL here we don't need to worry about xor eax, eax because that gets optimized into:
