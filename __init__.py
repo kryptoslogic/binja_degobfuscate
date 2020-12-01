@@ -87,7 +87,7 @@ class EmuMagic(object):
             self.registers[register_name] = value
             return value
 
-        # from https://github.com/joshwatshttps://github.com/joshwatson/emilator/blob/master/emilator.py#L139-L148on/emilator/blob/master/emilator.py#L139-L148
+        # from https://github.com/joshwatson/emilator/blob/master/emilator.py#L139-L148on/emilator/blob/master/emilator.py#L139-L148
         # mask off the value that will be replaced
         full_width_reg_info = self.arch.regs[register_info.full_width_reg]
         full_width_reg_value = self.registers[full_width_reg_info.full_width_reg]
@@ -282,7 +282,7 @@ class EmuMagic(object):
         self.memory = bytearray('\x00', encoding='ascii')*10000000
         self.stack = []
 
-        # TODO: Not sure how this will be handled in other architectures?
+        # TODO: Test on non-x86/x64
         # https://www.reddit.com/r/golang/comments/gq4pfh/what_is_the_purpose_of_fs_and_gs_registers_in/
         # rcx = [fsbase - 8].q
         # if (rsp u<= [rcx + 0x10].q) then 2 @ 0x6aec49 else 4 @ 0x6aebb3
@@ -294,14 +294,10 @@ class EmuMagic(object):
         self.registers[bv.arch.stack_pointer] = 5000
         self.structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q', 16: 'QQ'}
 
-        #Initialize at creation as opposed to each emulation step for performance
         self.highlight = Settings().get_bool("degobfuscate.highlight")
 
 
 def validfunc(bv, func):
-    #Disabling this until it's integrated into the deobfuscation plugin since the symbols will not be auto
-    #if func.symbol.auto == False:
-        #return False
     morestack_noctxt_sym = bv.get_symbols_by_name("runtime.morestack_noctxt") or bv.get_symbols_by_name("_runtime.morestack_noctxt") or bv.get_symbols_by_name("runtime_morestack_noctxt") or bv.get_symbols_by_name("_runtime_morestack_noctxt")
     slicebytetostring_sym = bv.get_symbols_by_name("runtime.slicebytetostring") or bv.get_symbols_by_name("_runtime.slicebytetostring") or bv.get_symbols_by_name("runtime_slicebytetostring") or bv.get_symbols_by_name("_runtime_slicebytetostring")
     morestack_noctxt = bv.get_function_at(morestack_noctxt_sym[0].address)
@@ -383,9 +379,9 @@ def deob(bv):
     d.start()
 
 def deobsingle(bv, func):
-    if validfunc(bv, func):
+    try:
         deobfunc(bv, func)
-    else:
+    except:
         log_warn(f"DeGObfuscate: {func.name} is not a valid candidate function")
 
 PluginCommand.register_for_function("DeGObfuscate single function", "Tries to just deobfuscate this function as a gobfuscated string", deobsingle)
