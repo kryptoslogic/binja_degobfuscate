@@ -40,9 +40,9 @@ def handle_deref(bv, deref_size, deref_addr):
     return data
 
 class EmuMagic(object):
-
     def _get_struct_fmt(self, size, signed):
-        fmt = self.structfmt[size]
+        structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q', 16: 'QQ'}
+        fmt = structfmt[size]
         if signed:
             fmt = fmt.lower()
         return (
@@ -54,9 +54,11 @@ class EmuMagic(object):
         def get_data(addr, size):
             for segment in self.bv.segments:
                 if addr >= segment.start and addr <= segment.end:
-                    log_debug(f"READING {size} BYTES FROM SEGMENT @ {addr}")
                     return self.bv.read(addr, size)
             return self.memory[addr:addr+size]
+
+        if location < 0:
+            raise Exception("Negative memory reading, something is broken")
 
         if size <= 8:
             return struct.unpack(self._get_struct_fmt(size, False), get_data(location, size))[0]
@@ -162,6 +164,16 @@ class EmuMagic(object):
     def handle_LLIL_POP(self, expr):
         return self.stack_pop(expr.size)
 
+    def handle_LLIL_SET_FLAG(self, inst):
+        flag = inst.dest.index
+        value = self.handle(inst.src)
+        self.flags[flag] = value
+        return
+
+    def handle_LLIL_FLAG(self, inst):
+        flag = inst.src.index
+        return self.flags.get(flag, False)
+
     def handle_LLIL_XOR(self, inst):
         left = self.handle(inst.left)
         right = self.handle(inst.right)
@@ -180,18 +192,63 @@ class EmuMagic(object):
         value = self.handle(inst.src)
         self.write_memory(addr, inst.size, value)
 
+    def handle_LLIL_CMP_NE(self, inst):
+        return self.handle(inst.left) != self.handle(inst.right)
+
+    def handle_LLIL_CMP_E(self, inst):
+        return self.handle(inst.left) == self.handle(inst.right)
+
+    def handle_LLIL_AND(self, inst):
+        return self.handle(inst.left) & self.handle(inst.right)
+
+    # Signed less than or equal
+    def handle_LLIL_CMP_SLE(self, inst):
+        left = self.handle(inst.left)
+        right = self.handle(inst.right)
+        return left <= right
+
     # Signed less than
     def handle_LLIL_CMP_SLT(self, inst):
         left = self.handle(inst.left)
         right = self.handle(inst.right)
         return left < right
+
+    # Signed greater than
+    def handle_LLIL_CMP_SGT(self, inst):
+        left = self.handle(inst.left)
+        right = self.handle(inst.right)
+        return left > right
+
+    # Signed greater than or equal
+    def handle_LLIL_CMP_SGE(self, inst):
+        left = self.handle(inst.left)
+        right = self.handle(inst.right)
+        return left >= right
         
     # Unsigned less than or equal
     def handle_LLIL_CMP_ULE(self, inst):
         left = int(self.handle(inst.left))
         right = int(self.handle(inst.right))
         return left <= right
-    
+
+    # Unsigned greater than or equal
+    def handle_LLIL_CMP_UGE(self, inst):
+        left = int(self.handle(inst.left))
+        right = int(self.handle(inst.right))
+        return left >= right
+
+    # Unsigned greater than
+    def handle_LLIL_CMP_UGT(self, inst):
+        left = int(self.handle(inst.left))
+        right = int(self.handle(inst.right))
+        return left > right
+
+    # Unsigned less than
+    def handle_LLIL_CMP_ULT(self, inst):
+        left = int(self.handle(inst.left))
+        right = int(self.handle(inst.right))
+        return left < right
+
     def handle_LLIL_IF(self, expr):
         res = self.handle(expr.condition)
         if res:
@@ -242,7 +299,7 @@ class EmuMagic(object):
             handler = f"handle_{inst.operation.name}"
             has_handler = hasattr(self, handler)
             if has_handler is False:
-                log_debug(f"DeGObfuscate implement: {inst.operation.name}")
+                log_warn(f"DeGObfuscate needs to implement: {inst.operation.name}")
                 return None
             else:
                 res = getattr(self, handler)(inst)
@@ -273,6 +330,7 @@ class EmuMagic(object):
         self.ip = 0
         self.output = ""
 
+        self.flags = {}
         self.registers = {}
         for r in self.arch.regs:
             reg = self.arch.regs[r]
@@ -291,7 +349,7 @@ class EmuMagic(object):
             self.registers["fsbase"] = 100
             self.registers["gsbase"] = 100
         self.registers[bv.arch.stack_pointer] = 0x10000
-        self.structfmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q', 16: 'QQ'}
+        self.write_memory(self.registers["gsbase"], 4, 0x2000)
 
         self.highlight = Settings().get_bool("degobfuscate.highlight")
 
