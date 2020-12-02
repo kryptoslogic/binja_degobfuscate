@@ -1,7 +1,7 @@
-# DeGObfuscate (v1.0)
-Author: **jamie-34254**
+# DeGObfuscate (v1.0.0)
+Author: **Jamie Hankins**
 
-_De-obfuscates strings inside of obfuscated GO binaries_
+_De-obfuscates strings inside of obfuscated Go binaries_
 
 ## Description:
 
@@ -18,11 +18,11 @@ To activate it, use either the `Tools` menu or the command palette. It offers tw
 
 no special instructions, package manager is recommended
 
-### Linux
+### Windows
 
 no special instructions, package manager is recommended
 
-### Windows
+### Linux
 
 no special instructions, package manager is recommended
 
@@ -31,13 +31,6 @@ no special instructions, package manager is recommended
 This plugin requires the following minimum version of Binary Ninja:
 
 * 1528
-
-
-
-## Required Dependencies
-
-The following dependencies are required for this plugin:
-
 
 
 ## License
