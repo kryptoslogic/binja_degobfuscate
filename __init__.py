@@ -137,7 +137,7 @@ class EmuMagic(object):
         callee = self.handle(expr.dest)
         callee_func = self.bv.get_function_at(callee)
 
-        slicebytetostring_sym = self.bv.get_symbols_by_name("runtime.slicebytetostring") or self.bv.get_symbols_by_name("_runtime.slicebytetostring") or self.bv.get_symbols_by_name("runtime_slicebytetostring") or self.bv.get_symbols_by_name("_runtime_slicebytetostring")
+        slicebytetostring_sym = self.bv.get_symbols_by_name("go.runtime.slicebytetostring") or self.bv.get_symbols_by_name("runtime.slicebytetostring") or self.bv.get_symbols_by_name("_runtime.slicebytetostring") or self.bv.get_symbols_by_name("runtime_slicebytetostring") or self.bv.get_symbols_by_name("_runtime_slicebytetostring")
         slicebytetostring = self.bv.get_function_at(slicebytetostring_sym[0].address)
         if callee_func == slicebytetostring:
             log_debug("LLIL_CALL: Avoiding call to runtime function, we are out of here!")
@@ -355,8 +355,8 @@ class EmuMagic(object):
 
 
 def validfunc(bv, func):
-    morestack_noctxt_sym = bv.get_symbols_by_name("runtime.morestack_noctxt") or bv.get_symbols_by_name("_runtime.morestack_noctxt") or bv.get_symbols_by_name("runtime_morestack_noctxt") or bv.get_symbols_by_name("_runtime_morestack_noctxt")
-    slicebytetostring_sym = bv.get_symbols_by_name("runtime.slicebytetostring") or bv.get_symbols_by_name("_runtime.slicebytetostring") or bv.get_symbols_by_name("runtime_slicebytetostring") or bv.get_symbols_by_name("_runtime_slicebytetostring")
+    morestack_noctxt_sym = bv.get_symbols_by_name("go.runtime.morestack_noctxt") or bv.get_symbols_by_name("runtime.morestack_noctxt") or bv.get_symbols_by_name("_runtime.morestack_noctxt") or bv.get_symbols_by_name("runtime_morestack_noctxt") or bv.get_symbols_by_name("_runtime_morestack_noctxt")
+    slicebytetostring_sym = bv.get_symbols_by_name("go.runtime.slicebytetostring") or bv.get_symbols_by_name("runtime.slicebytetostring") or bv.get_symbols_by_name("_runtime.slicebytetostring") or bv.get_symbols_by_name("runtime_slicebytetostring") or bv.get_symbols_by_name("_runtime_slicebytetostring")
     morestack_noctxt = bv.get_function_at(morestack_noctxt_sym[0].address)
     slicebytetostring = bv.get_function_at(slicebytetostring_sym[0].address)
     # TODO: Replace this with a much more robust heuristic for detecting obfuscated functions
