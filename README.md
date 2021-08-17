@@ -1,4 +1,4 @@
-# DeGObfuscate (v1.0.1)
+# DeGObfuscate (v1.0.2)
 Author: **Jamie Hankins**
 
 _De-obfuscates strings inside of obfuscated Go binaries_
