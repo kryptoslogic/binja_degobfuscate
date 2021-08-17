@@ -353,10 +353,13 @@ class EmuMagic(object):
 
         self.highlight = Settings().get_bool("degobfuscate.highlight")
 
-
-def validfunc(bv, func):
+def get_runtime_funcs(bv):
     morestack_noctxt_sym = bv.get_symbols_by_name("go.runtime.morestack_noctxt") or bv.get_symbols_by_name("runtime.morestack_noctxt") or bv.get_symbols_by_name("_runtime.morestack_noctxt") or bv.get_symbols_by_name("runtime_morestack_noctxt") or bv.get_symbols_by_name("_runtime_morestack_noctxt")
     slicebytetostring_sym = bv.get_symbols_by_name("go.runtime.slicebytetostring") or bv.get_symbols_by_name("runtime.slicebytetostring") or bv.get_symbols_by_name("_runtime.slicebytetostring") or bv.get_symbols_by_name("runtime_slicebytetostring") or bv.get_symbols_by_name("_runtime_slicebytetostring")
+    return (morestack_noctxt_sym, slicebytetostring_sym)
+
+def validfunc(bv, func):
+    morestack_noctxt_sym, slicebytetostring_sym = get_runtime_funcs(bv)
     morestack_noctxt = bv.get_function_at(morestack_noctxt_sym[0].address)
     slicebytetostring = bv.get_function_at(slicebytetostring_sym[0].address)
     # TODO: Replace this with a much more robust heuristic for detecting obfuscated functions
@@ -415,6 +418,12 @@ class Deob(BackgroundTaskThread):
         self.index = 0
 
     def run(self):
+        morestack_noctxt_sym, slicebytetostring_sym = get_runtime_funcs(self.bv)
+        if len(morestack_noctxt_sym) == 0 or len(slicebytetostring_sym) == 0:
+            log_alert("Unable to find Go runtime slicebytetostring and/or morestack_noctxt functions. Make sure you recover symbols before running degobfuscate.")
+            self.progress = f"DeGObfuscate failed, aborting"
+            return
+
         for func in self.bv.functions:
             if self.cancelled:
                 self.progress = f"DeGObfuscate cancelled, aborting"
